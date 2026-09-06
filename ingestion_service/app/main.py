@@ -26,6 +26,8 @@ from app.services.google_news_url_resolver import (
 from app.services.ingestion_service import IngestionService
 from app.services.rss_parser import RSSParser
 
+import argparse
+
 
 def create_ingestion_service() -> IngestionService:
     """
@@ -108,7 +110,7 @@ def sync_feeds() -> int:
     return feed_sync_service.sync()
 
 
-def main() -> None:
+def main(feed_id: str | None = None) -> None:
     """
     Application entry point.
     """
