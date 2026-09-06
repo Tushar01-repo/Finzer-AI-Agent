@@ -1,0 +1,122 @@
+# =========================
+# Environment / Secrets
+# =========================
+
+.env
+.env.*
+!.env.example
+
+# =========================
+# Python
+# =========================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.so
+
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# =========================
+# Virtual Environments
+# =========================
+
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Testing / Coverage
+# =========================
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache/
+
+# =========================
+# Type Checking
+# =========================
+
+.mypy_cache/
+.pyre/
+.pytype/
+
+# =========================
+# IDEs / Editors
+# =========================
+
+.vscode/
+.idea/
+*.iml
+
+# =========================
+# OS Files
+# =========================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+
+*.log
+logs/
+
+# =========================
+# Local Data
+# =========================
+
+data/
+tmp/
+temp/
+
+# =========================
+# Jupyter
+# =========================
+
+.ipynb_checkpoints/
+
+# =========================
+# Docker
+# =========================
+
+.docker/
+
+# =========================
+# Local configuration
+# =========================
+
+*.local
+
+# =========================
+# Proof Of Concept
+# =========================
+proof_of_concept
+deployment
+docs

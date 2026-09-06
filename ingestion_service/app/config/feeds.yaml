@@ -1,0 +1,189 @@
+google_news:
+  base_url: "https://news.google.com/rss/search"
+  language: "en-IN"
+  country: "IN"
+  ceid: "IN:en"
+
+feeds:
+
+  # ============================================================
+  # MARKET
+  # ============================================================
+
+  - feed_id: market_india
+    feed_type: market
+    feed_value: india
+    query: "India stock market OR Indian share market"
+    enabled: true
+
+  - feed_id: market_nifty
+    feed_type: market
+    feed_value: nifty
+    query: "Nifty OR Nifty 50"
+    enabled: true
+
+  - feed_id: market_sensex
+    feed_type: market
+    feed_value: sensex
+    query: "Sensex"
+    enabled: true
+
+  # ============================================================
+  # MACRO
+  # ============================================================
+
+  - feed_id: macro_rbi
+    feed_type: macro
+    feed_value: rbi
+    query: "RBI OR Reserve Bank of India"
+    enabled: true
+
+  - feed_id: macro_economy
+    feed_type: macro
+    feed_value: economy
+    query: "India economy OR Indian economy"
+    enabled: true
+
+  # ============================================================
+  # CORPORATE
+  # ============================================================
+
+  - feed_id: corporate_earnings
+    feed_type: corporate
+    feed_value: earnings
+    query: "India corporate earnings OR quarterly results"
+    enabled: true
+
+  - feed_id: corporate_actions
+    feed_type: corporate
+    feed_value: actions
+    query: "India corporate actions OR dividends OR buyback"
+    enabled: true
+
+  # ============================================================
+  # SECTORS
+  # ============================================================
+
+  - feed_id: sector_it
+    feed_type: sector
+    feed_value: it
+    query: "India IT sector OR IT stocks"
+    enabled: true
+
+  - feed_id: sector_banks
+    feed_type: sector
+    feed_value: banks
+    query: "India banks OR banking stocks"
+    enabled: true
+
+  - feed_id: sector_pharma
+    feed_type: sector
+    feed_value: pharma
+    query: "India pharma OR pharmaceutical stocks"
+    enabled: true
+
+  - feed_id: sector_auto
+    feed_type: sector
+    feed_value: auto
+    query: "India auto sector OR automobile stocks"
+    enabled: true
+
+  - feed_id: sector_fmcg
+    feed_type: sector
+    feed_value: fmcg
+    query: "India FMCG stocks"
+    enabled: true
+
+  - feed_id: sector_metals
+    feed_type: sector
+    feed_value: metals
+    query: "India metals OR metal stocks"
+    enabled: true
+
+  - feed_id: sector_oil_gas
+    feed_type: sector
+    feed_value: oil_gas
+    query: "India oil gas OR energy stocks"
+    enabled: true
+
+  # ============================================================
+  # INDICES
+  # ============================================================
+
+  - feed_id: index_nifty_50
+    feed_type: index
+    feed_value: nifty_50
+    query: "Nifty 50"
+    enabled: true
+
+  - feed_id: index_nifty_bank
+    feed_type: index
+    feed_value: nifty_bank
+    query: "Nifty Bank"
+    enabled: true
+
+  - feed_id: index_nifty_it
+    feed_type: index
+    feed_value: nifty_it
+    query: "Nifty IT"
+    enabled: true
+
+  - feed_id: index_nifty_midcap
+    feed_type: index
+    feed_value: nifty_midcap
+    query: "Nifty Midcap"
+    enabled: true
+
+  - feed_id: index_sensex
+    feed_type: index
+    feed_value: sensex
+    query: "Sensex"
+    enabled: true
+
+  # ============================================================
+  # COMPANIES
+  # ============================================================
+
+  - feed_id: company_reliance
+    feed_type: company
+    feed_value: reliance
+    query: "Reliance Industries"
+    enabled: true
+
+  - feed_id: company_tcs
+    feed_type: company
+    feed_value: tcs
+    query: "TCS OR Tata Consultancy Services"
+    enabled: true
+
+  - feed_id: company_infosys
+    feed_type: company
+    feed_value: infosys
+    query: "Infosys"
+    enabled: true
+
+  - feed_id: company_hdfc_bank
+    feed_type: company
+    feed_value: hdfc_bank
+    query: "HDFC Bank"
+    enabled: true
+
+  # ============================================================
+  # MUTUAL FUNDS
+  # ============================================================
+
+  - feed_id: mutual_fund_india
+    feed_type: mutual_fund
+    feed_value: india
+    query: "India mutual funds"
+    enabled: true
+
+  # ============================================================
+  # ETF / GOLD
+  # ============================================================
+
+  - feed_id: etf_gold
+    feed_type: etf
+    feed_value: gold
+    query: "India gold ETF OR gold ETFs"
+    enabled: true

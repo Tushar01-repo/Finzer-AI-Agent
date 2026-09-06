@@ -1,0 +1,9 @@
+feedparser
+requests
+beautifulsoup4
+newspaper3k
+lxml_html_clean
+PyYAML
+psycopg[binary]
+pika
+python-dotenv
