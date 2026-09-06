@@ -15,8 +15,7 @@ def main() -> None:
     print("=" * 80)
     print()
 
-    # api_key = os.getenv("NEWSDATA_API_KEY")
-    api_key = "pub_d17be93e576146cb85e59612722ac686"
+    api_key = os.getenv("NEWSDATA_API_KEY")
 
     if not api_key:
         print("ERROR: NEWSDATA_API_KEY is not configured.")
