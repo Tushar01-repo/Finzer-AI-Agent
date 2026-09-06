@@ -65,9 +65,17 @@ class IngestionService:
         self.article_feed_repository = article_feed_repository
         self.queue_publisher = queue_publisher
 
-    def ingest(self) -> dict[str, int]:
+    def ingest(
+        self,
+        feed_id: str | None = None,
+    ) -> dict[str, int]:
         """
-        Process all enabled feeds.
+        Process enabled feeds or a specific feed.
+
+        Args:
+            feed_id:
+                Optional feed ID. If provided, only that feed
+                is processed.
 
         Returns:
             Statistics describing the ingestion run.
@@ -83,7 +91,13 @@ class IngestionService:
             "messages_published": 0,
         }
 
-        for feed in self.feed_registry.enabled():
+        feeds = (
+            [self.feed_registry.get(feed_id)]
+            if feed_id
+            else self.feed_registry.enabled()
+        )
+
+        for feed in feeds:
             stats["feeds_processed"] += 1
 
             try:
