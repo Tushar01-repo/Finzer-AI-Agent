@@ -1,3 +1,5 @@
+import logging
+
 from typing import Any
 
 from app.models.database_schema import (
@@ -22,6 +24,7 @@ from app.services.rss_parser import RSSParser
 from app.config.feed_registry import FeedRegistry
 from app.queue.queue_publisher import QueuePublisher
 
+logger = logging.getLogger(__name__)
 
 class IngestionService:
     """
@@ -97,8 +100,17 @@ class IngestionService:
             else self.feed_registry.enabled()
         )
 
+        logger.info(
+            "Starting the ingestion, feed_id=%s, feeds=%d",
+            feed_id,
+            len(feeds)
+        )
+
         for feed in feeds:
+            current_feed_id = feed.get("feed_id", feed_id)
             stats["feeds_processed"] += 1
+
+            logger.info("Processing feed: feed_id=%s", current_feed_id)
 
             try:
                 feed_stats = self._process_feed(feed)
@@ -106,8 +118,18 @@ class IngestionService:
                 for key, value in feed_stats.items():
                     stats[key] += value
 
+                logger.info(
+                    "Finished feed: feed_id=%s, stats=%s",
+                    current_feed_id,
+                    feed_stats,
+                )
+
             except Exception:
                 # One feed failure must not stop the remaining feeds.
+                logger.exception(
+                    "Failed to process feed: feed_id=%s",
+                    current_feed_id,
+                )
                 continue
 
         return stats
@@ -138,7 +160,25 @@ class IngestionService:
 
         stats["rss_entries"] = len(entries)
 
-        for entry in entries:
+        logger.info(
+            "Fetched feed: feed_id=%s, rss_entries=%d",
+            feed.get("feed_id"),
+            len(entries),
+        )
+
+        for index, entry in enumerate(entries, start=1):
+            article_title = entry.get("rss_title")
+            google_news_url = entry.get("google_news_link")
+
+            logger.info(
+                "Processing article %d/%d: feed_id=%s, title=%r, url=%s",
+                index,
+                len(entries),
+                feed.get("feed_id"),
+                article_title,
+                google_news_url,
+            )
+
             try:
                 result = self._process_entry(
                     entry,
@@ -150,11 +190,27 @@ class IngestionService:
                 if result["is_new"]:
                     stats["articles_inserted"] += 1
                     stats["messages_published"] += 1
+                    logger.info(
+                        "Inserted new article: feed_id=%s, title=%r",
+                        feed.get("feed_id"),
+                        article_title,
+                    )
                 else:
                     stats["articles_updated"] += 1
+                    logger.info(
+                        "Updated existing article: feed_id=%s, title=%r",
+                        feed.get("feed_id"),
+                        article_title,
+                    )
 
             except Exception:
                 stats["articles_failed"] += 1
+                logger.exception(
+                    "Failed to process article: feed_id=%s, title=%r, url=%s",
+                    feed.get("feed_id"),
+                    article_title,
+                    google_news_url,
+                )
 
         return stats
 
