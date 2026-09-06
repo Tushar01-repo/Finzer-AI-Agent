@@ -1,26 +1,25 @@
+from pathlib import Path
+
 from app.config.feed_registry import FeedRegistry
 from app.services.google_search_news_parser import GoogleSearchNewsParser
 from app.services.google_search_news_provider import GoogleSearchNewsProvider
 
 
 def main() -> None:
-    registry = FeedRegistry()
+    base_dir = Path(__file__).resolve().parents[1]
+    feeds_config = base_dir / "app" / "config" / "feeds.yaml"
+
+    registry = FeedRegistry(feeds_config)
     feed = registry.get("company_tcs")
 
-    provider = GoogleSearchNewsProvider(
-        delay_seconds=0,
-    )
-
+    provider = GoogleSearchNewsProvider(delay_seconds=0)
     parser = GoogleSearchNewsParser()
 
     print(f"Searching for: {feed['query']}")
-
     html = provider.search(feed)
-
     print(f"Received HTML: {len(html)} characters")
 
     results = parser.parse(html)
-
     print(f"Articles discovered: {len(results)}")
     print()
 
