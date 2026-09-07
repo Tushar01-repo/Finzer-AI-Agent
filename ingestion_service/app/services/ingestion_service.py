@@ -104,7 +104,7 @@ class IngestionService:
             "Starting the ingestion, feed_id=%s, feeds=%d",
             feed_id,
             len(feeds)
-        )
+        )  
 
         for feed in feeds:
             current_feed_id = feed.get("feed_id", feed_id)

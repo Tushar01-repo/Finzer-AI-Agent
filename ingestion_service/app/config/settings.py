@@ -21,27 +21,16 @@ class Settings:
     )
 
     # ------------------------------------------------------------------
-    # Google News
+    # NewsData IO
     # ------------------------------------------------------------------
 
-    GOOGLE_NEWS_BASE_URL = os.getenv(
-        "GOOGLE_NEWS_BASE_URL",
-        "https://news.google.com/rss/search"
+    NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "")
+    NEWSDATA_BASE_URL = os.getenv(
+        "NEWSDATA_BASE_URL",
+        "https://newsdata.io/api/1/latest",
     )
-
-    GOOGLE_NEWS_LANGUAGE = os.getenv(
-        "GOOGLE_NEWS_LANGUAGE",
-        "en-IN"
-    )
-
-    GOOGLE_NEWS_COUNTRY = os.getenv(
-        "GOOGLE_NEWS_COUNTRY",
-        "IN"
-    )
-
-    GOOGLE_NEWS_CEID = os.getenv(
-        "GOOGLE_NEWS_CEID",
-        "IN:en"
+    MAX_PAGES_PER_FEED = int(
+        os.getenv("MAX_PAGES_PER_FEED", "3")
     )
 
     # ------------------------------------------------------------------
