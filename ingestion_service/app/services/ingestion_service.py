@@ -2,10 +2,13 @@ import logging
 
 from typing import Any
 
+from app.config.feed_registry import FeedRegistry
 from app.models.database_schema import (
     ArticleFeedRecord,
     ArticleRecord,
 )
+from app.providers.news.base import NewsDiscoveryProvider
+from app.queue.queue_publisher import QueuePublisher
 from app.repositories.article_feed_repository import (
     ArticleFeedRepository,
 )
@@ -16,15 +19,13 @@ from app.services.article_content_extractor import (
     ArticleContentExtractor,
 )
 from app.services.article_normalizer import ArticleNormalizer
-from app.services.feed_fetcher import FeedFetcher
-from app.services.google_news_url_resolver import (
-    GoogleNewsURLResolver,
+from app.services.news_discovery_service import (
+    NewsDiscoveryService,
 )
-from app.services.rss_parser import RSSParser
-from app.config.feed_registry import FeedRegistry
-from app.queue.queue_publisher import QueuePublisher
+
 
 logger = logging.getLogger(__name__)
+
 
 class IngestionService:
     """
@@ -32,8 +33,7 @@ class IngestionService:
 
     Responsibilities:
     - Process enabled feeds
-    - Fetch and parse RSS feeds
-    - Resolve Google News URLs
+    - Discover articles through a news provider
     - Extract article content
     - Normalize article data
     - Deduplicate articles
@@ -49,9 +49,7 @@ class IngestionService:
     def __init__(
         self,
         feed_registry: FeedRegistry,
-        feed_fetcher: FeedFetcher,
-        rss_parser: RSSParser,
-        url_resolver: GoogleNewsURLResolver,
+        news_discovery_service: NewsDiscoveryService,
         content_extractor: ArticleContentExtractor,
         normalizer: ArticleNormalizer,
         article_repository: ArticleRepository,
@@ -59,9 +57,7 @@ class IngestionService:
         queue_publisher: QueuePublisher,
     ):
         self.feed_registry = feed_registry
-        self.feed_fetcher = feed_fetcher
-        self.rss_parser = rss_parser
-        self.url_resolver = url_resolver
+        self.news_discovery_service = news_discovery_service
         self.content_extractor = content_extractor
         self.normalizer = normalizer
         self.article_repository = article_repository
@@ -86,7 +82,6 @@ class IngestionService:
 
         stats = {
             "feeds_processed": 0,
-            "rss_entries": 0,
             "articles_discovered": 0,
             "articles_inserted": 0,
             "articles_updated": 0,
@@ -103,17 +98,26 @@ class IngestionService:
         logger.info(
             "Starting the ingestion, feed_id=%s, feeds=%d",
             feed_id,
-            len(feeds)
-        )  
+            len(feeds),
+        )
 
         for feed in feeds:
-            current_feed_id = feed.get("feed_id", feed_id)
+            current_feed_id = feed.get(
+                "feed_id",
+                feed_id,
+            )
+
             stats["feeds_processed"] += 1
 
-            logger.info("Processing feed: feed_id=%s", current_feed_id)
+            logger.info(
+                "Processing feed: feed_id=%s",
+                current_feed_id,
+            )
 
             try:
-                feed_stats = self._process_feed(feed)
+                feed_stats = self._process_feed(
+                    feed
+                )
 
                 for key, value in feed_stats.items():
                     stats[key] += value
@@ -130,7 +134,6 @@ class IngestionService:
                     "Failed to process feed: feed_id=%s",
                     current_feed_id,
                 )
-                continue
 
         return stats
 
@@ -140,10 +143,13 @@ class IngestionService:
     ) -> dict[str, int]:
         """
         Process a single configured feed.
+
+        Discovery is provider-agnostic. The ingestion service
+        only works with the canonical DiscoveredArticle model
+        returned by NewsDiscoveryService.
         """
 
         stats = {
-            "rss_entries": 0,
             "articles_discovered": 0,
             "articles_inserted": 0,
             "articles_updated": 0,
@@ -151,37 +157,65 @@ class IngestionService:
             "messages_published": 0,
         }
 
-        rss_content = self.feed_fetcher.fetch(feed)
+        query = feed.get("query")
 
-        entries = self.rss_parser.parse(
-            rss_content,
-            feed,
+        if isinstance(query, list):
+            query = " OR ".join(
+                str(item).strip()
+                for item in query
+                if str(item).strip()
+            )
+
+        if not query:
+            logger.warning(
+                "Skipping feed without query: feed_id=%s",
+                feed.get("feed_id"),
+            )
+            return stats
+
+        max_articles = feed.get(
+            "max_articles",
         )
 
-        stats["rss_entries"] = len(entries)
+        if max_articles is None:
+            from app.config.settings import settings
+
+            max_articles = settings.MAX_ARTICLES_PER_FEED
 
         logger.info(
-            "Fetched feed: feed_id=%s, rss_entries=%d",
+            "Discovering articles: feed_id=%s, query=%r, max_articles=%d",
             feed.get("feed_id"),
-            len(entries),
+            query,
+            max_articles,
         )
 
-        for index, entry in enumerate(entries, start=1):
-            article_title = entry.get("rss_title")
-            google_news_url = entry.get("google_news_link")
+        articles = self.news_discovery_service.discover(
+            query=query,
+            max_articles=max_articles,
+        )
 
+        logger.info(
+            "Articles discovered: feed_id=%s, count=%d",
+            feed.get("feed_id"),
+            len(articles),
+        )
+
+        for index, article in enumerate(
+            articles,
+            start=1,
+        ):
             logger.info(
                 "Processing article %d/%d: feed_id=%s, title=%r, url=%s",
                 index,
-                len(entries),
+                len(articles),
                 feed.get("feed_id"),
-                article_title,
-                google_news_url,
+                article.title,
+                article.url,
             )
 
             try:
-                result = self._process_entry(
-                    entry,
+                result = self._process_article(
+                    article,
                     feed,
                 )
 
@@ -190,52 +224,46 @@ class IngestionService:
                 if result["is_new"]:
                     stats["articles_inserted"] += 1
                     stats["messages_published"] += 1
+
                     logger.info(
                         "Inserted new article: feed_id=%s, title=%r",
                         feed.get("feed_id"),
-                        article_title,
+                        article.title,
                     )
+
                 else:
                     stats["articles_updated"] += 1
+
                     logger.info(
                         "Updated existing article: feed_id=%s, title=%r",
                         feed.get("feed_id"),
-                        article_title,
+                        article.title,
                     )
 
             except Exception:
                 stats["articles_failed"] += 1
+
                 logger.exception(
                     "Failed to process article: feed_id=%s, title=%r, url=%s",
                     feed.get("feed_id"),
-                    article_title,
-                    google_news_url,
+                    article.title,
+                    article.url,
                 )
 
         return stats
 
-    def _process_entry(
+    def _process_article(
         self,
-        entry: dict[str, Any],
+        article: Any,
         feed: dict[str, Any],
     ) -> dict[str, bool]:
         """
-        Process one RSS entry from discovery to persistence.
+        Process one discovered article from extraction
+        to persistence.
         """
 
-        google_news_url = entry["google_news_link"]
-
-        if not google_news_url:
-            raise ValueError(
-                "RSS entry does not contain a Google News URL."
-            )
-
-        article_url = self.url_resolver.resolve(
-            google_news_url
-        )
-
         extraction = self.content_extractor.extract(
-            article_url
+            article.url
         )
 
         if extraction.get("status") != "success":
@@ -248,25 +276,39 @@ class IngestionService:
 
         normalized = self.normalizer.normalize(
             {
-                "title": extraction.get("title")
-                or entry.get("rss_title"),
-                "url": article_url,
-                "source": extraction.get("source")
-                or entry.get("rss_source"),
-                "authors": extraction.get("authors", []),
-                "published_at": extraction.get("published_at")
-                or entry.get("rss_published"),
-                "content": extraction.get("content"),
+                "title": (
+                    extraction.get("title")
+                    or article.title
+                ),
+                "url": article.url,
+                "source": (
+                    extraction.get("source")
+                    or article.source
+                ),
+                "authors": (
+                    extraction.get("authors")
+                    or article.authors
+                    or []
+                ),
+                "published_at": (
+                    extraction.get("published_at")
+                    or article.published_at
+                ),
+                "content": extraction.get(
+                    "content"
+                ),
             }
         )
 
         article_key = normalized["article_key"]
 
-        existing_article = self.article_repository.get_by_key(
-            article_key
+        existing_article = (
+            self.article_repository.get_by_key(
+                article_key
+            )
         )
 
-        article = ArticleRecord(
+        article_record = ArticleRecord(
             article_key=article_key,
             title=normalized["title"],
             url=normalized["url"],
@@ -297,7 +339,9 @@ class IngestionService:
             ),
         )
 
-        self.article_repository.upsert(article)
+        self.article_repository.upsert(
+            article_record
+        )
 
         self.article_feed_repository.add(
             ArticleFeedRecord(
