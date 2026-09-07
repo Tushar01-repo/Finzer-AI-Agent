@@ -1,5 +1,7 @@
 from typing import Any
 
+from psycopg.types.json import Json
+
 from app.models.database_schema import ArticleRecord
 from app.repositories.database import PostgresDatabase
 
@@ -66,7 +68,9 @@ class ArticleRepository:
             article.title,
             article.url,
             article.source,
-            article.authors,
+            Json(article.authors)
+            if article.authors is not None
+            else None,
             article.published_at,
             article.content,
             article.content_hash,
