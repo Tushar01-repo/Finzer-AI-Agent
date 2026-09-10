@@ -60,14 +60,11 @@ class ArticleContentExtractor:
         "Accept-Language": "en-IN,en;q=0.9",
     }
 
-    # These are failures where retrying the same request normally
-    # does not help.
     BLOCKED_STATUS_CODES = {
         401,
         403,
     }
 
-    # These failures may be temporary and are worth retrying.
     RETRY_STATUS_CODES = {
         429,
         500,
@@ -107,10 +104,7 @@ class ArticleContentExtractor:
             retry_count:
                 Number of retries after the initial request.
 
-                Example:
-                    retry_count=2
-
-                means at most:
+                retry_count=2 means:
 
                     initial request
                     + retry 1
@@ -120,8 +114,8 @@ class ArticleContentExtractor:
                 Controls exponential delay between retries.
 
             session:
-                Optional requests.Session, mainly useful for
-                dependency injection/testing.
+                Optional requests.Session.
+                Useful for testing/dependency injection.
         """
 
         if timeout <= 0:
@@ -158,8 +152,11 @@ class ArticleContentExtractor:
         """
         Configure retry behavior for HTTP and HTTPS requests.
 
-        Only GET requests are retried because article extraction
-        performs read-only HTTP operations.
+        GET requests may be retried for:
+            - connection failures
+            - read failures
+            - HTTP 429
+            - selected 5xx errors
         """
 
         retry_strategy = Retry(
@@ -167,20 +164,12 @@ class ArticleContentExtractor:
             connect=self.retry_count,
             read=self.retry_count,
             status=self.retry_count,
-
             allowed_methods={
                 "GET",
             },
-
             status_forcelist=self.RETRY_STATUS_CODES,
-
             backoff_factor=self.backoff_factor,
-
-            # Respect Retry-After headers, especially useful for 429.
             respect_retry_after_header=True,
-
-            # Return the final response after retries are exhausted.
-            # response.raise_for_status() will then classify it below.
             raise_on_status=False,
         )
 
@@ -205,20 +194,8 @@ class ArticleContentExtractor:
         """
         Fetch and extract article information.
 
-        Returns a structured dictionary for both successful
-        and failed extraction attempts.
-
-        Failure types may include:
-            - blocked
-            - not_found
-            - server_error
-            - timeout
-            - connection_error
-            - request_error
-            - security_challenge
-            - insufficient_content
-            - extraction_error
-            - http_error
+        Returns structured information for both success
+        and failure cases.
         """
 
         result: dict[str, Any] = {
@@ -248,7 +225,7 @@ class ArticleContentExtractor:
             )
 
             # ----------------------------------------------------------
-            # Security / anti-bot challenge detection
+            # Security challenge detection
             # ----------------------------------------------------------
 
             if self._contains_security_challenge(
@@ -367,7 +344,7 @@ class ArticleContentExtractor:
                     return result
 
             # ----------------------------------------------------------
-            # HTML fetched, but article content was insufficient.
+            # HTML fetched, but content was not sufficient
             # ----------------------------------------------------------
 
             result["error_type"] = (
@@ -381,17 +358,25 @@ class ArticleContentExtractor:
 
             return result
 
+        # --------------------------------------------------------------
+        # Timeout
+        # --------------------------------------------------------------
+
         except requests.Timeout as exc:
             result["error_type"] = (
                 "timeout"
             )
 
             result["error"] = (
-                f"Publisher request timed out after retries "
+                "Publisher request timed out after retries "
                 f"were exhausted: {exc}"
             )
 
             return result
+
+        # --------------------------------------------------------------
+        # HTTP errors
+        # --------------------------------------------------------------
 
         except requests.HTTPError as exc:
             status_code = (
@@ -410,7 +395,10 @@ class ArticleContentExtractor:
                 )
             )
 
-            if status_code in self.BLOCKED_STATUS_CODES:
+            if (
+                status_code
+                in self.BLOCKED_STATUS_CODES
+            ):
                 result["error"] = (
                     f"Publisher returned HTTP "
                     f"{status_code}."
@@ -444,33 +432,67 @@ class ArticleContentExtractor:
 
             return result
 
-        except requests.ConnectionError as exc:
-            result["error_type"] = (
-                "connection_error"
-            )
+        # --------------------------------------------------------------
+        # Connection errors
+        #
+        # urllib3 may wrap exhausted read/connect timeouts inside
+        # requests.ConnectionError.
+        #
+        # Detect those cases so they remain classified as "timeout".
+        # --------------------------------------------------------------
 
-            result["error"] = (
-                "Publisher connection failed after "
-                f"retries were exhausted: {exc}"
-            )
+        except requests.ConnectionError as exc:
+            if self._is_retry_exhausted_timeout(
+                exc
+            ):
+                result["error_type"] = (
+                    "timeout"
+                )
+
+                result["error"] = (
+                    "Publisher request timed out after "
+                    f"retries were exhausted: {exc}"
+                )
+
+            else:
+                result["error_type"] = (
+                    "connection_error"
+                )
+
+                result["error"] = (
+                    "Publisher connection failed after "
+                    f"retries were exhausted: {exc}"
+                )
 
             return result
+
+        # --------------------------------------------------------------
+        # Other requests errors
+        # --------------------------------------------------------------
 
         except requests.RequestException as exc:
             result["error_type"] = (
                 "request_error"
             )
 
-            result["error"] = str(exc)
+            result["error"] = (
+                str(exc)
+            )
 
             return result
+
+        # --------------------------------------------------------------
+        # Unexpected extraction errors
+        # --------------------------------------------------------------
 
         except Exception as exc:
             result["error_type"] = (
                 "extraction_error"
             )
 
-            result["error"] = str(exc)
+            result["error"] = (
+                str(exc)
+            )
 
             return result
 
@@ -481,15 +503,8 @@ class ArticleContentExtractor:
         """
         Fetch publisher HTML.
 
-        Retry behavior is handled automatically by the configured
-        requests Session / HTTPAdapter.
-
-        Returns:
-            Tuple:
-                (
-                    response HTML,
-                    final HTTP status code,
-                )
+        Retry behavior is handled by the configured
+        requests Session.
         """
 
         logger.debug(
@@ -518,7 +533,7 @@ class ArticleContentExtractor:
         """
         Extract article metadata and content using newspaper3k.
 
-        Failure here does not fail the entire extraction because
+        Failure here does not fail the complete extraction because
         BeautifulSoup is attempted afterwards.
         """
 
@@ -588,7 +603,10 @@ class ArticleContentExtractor:
             "html.parser",
         )
 
-        # Remove common non-article elements.
+        # --------------------------------------------------------------
+        # Remove common non-content elements
+        # --------------------------------------------------------------
+
         for element in soup(
             [
                 "script",
@@ -603,6 +621,10 @@ class ArticleContentExtractor:
         ):
             element.decompose()
 
+        # --------------------------------------------------------------
+        # Title
+        # --------------------------------------------------------------
+
         title = None
 
         if soup.title:
@@ -610,6 +632,10 @@ class ArticleContentExtractor:
                 " ",
                 strip=True,
             )
+
+        # --------------------------------------------------------------
+        # Search for common article containers
+        # --------------------------------------------------------------
 
         content_container = None
 
@@ -642,12 +668,17 @@ class ArticleContentExtractor:
                     "p"
                 )
             )
+
         else:
             paragraphs = (
                 soup.find_all(
                     "p"
                 )
             )
+
+        # --------------------------------------------------------------
+        # Extract and deduplicate paragraphs
+        # --------------------------------------------------------------
 
         text_parts: list[str] = []
 
@@ -691,6 +722,10 @@ class ArticleContentExtractor:
         if not content:
             return None
 
+        # --------------------------------------------------------------
+        # OpenGraph image
+        # --------------------------------------------------------------
+
         image = soup.find(
             "meta",
             property="og:image",
@@ -699,8 +734,10 @@ class ArticleContentExtractor:
         top_image = None
 
         if image:
-            top_image = image.get(
-                "content"
+            top_image = (
+                image.get(
+                    "content"
+                )
             )
 
         return {
@@ -760,7 +797,9 @@ class ArticleContentExtractor:
             if paragraph.strip()
         ]
 
-        return len(paragraphs)
+        return len(
+            paragraphs
+        )
 
     def _contains_security_challenge(
         self,
@@ -787,11 +826,13 @@ class ArticleContentExtractor:
         status_code: int | None,
     ) -> str:
         """
-        Convert an HTTP status code into an internal
-        extraction failure category.
+        Convert HTTP status codes into internal failure categories.
         """
 
-        if status_code in self.BLOCKED_STATUS_CODES:
+        if (
+            status_code
+            in self.BLOCKED_STATUS_CODES
+        ):
             return "blocked"
 
         if status_code == 404:
@@ -807,3 +848,87 @@ class ArticleContentExtractor:
             return "server_error"
 
         return "http_error"
+
+    @staticmethod
+    def _is_retry_exhausted_timeout(
+        exc: Exception,
+    ) -> bool:
+        """
+        Detect timeout failures that urllib3/requests may wrap
+        inside ConnectionError after retry exhaustion.
+
+        Example chain:
+
+            requests.ConnectionError
+                ↓
+            urllib3.MaxRetryError
+                ↓
+            ReadTimeoutError
+
+        We inspect both exception class names and messages so the
+        final failure remains classified as "timeout".
+        """
+
+        current: BaseException | None = (
+            exc
+        )
+
+        visited: set[int] = set()
+
+        while current is not None:
+            current_id = id(
+                current
+            )
+
+            if current_id in visited:
+                break
+
+            visited.add(
+                current_id
+            )
+
+            class_name = (
+                current
+                .__class__
+                .__name__
+                .lower()
+            )
+
+            message = (
+                str(current)
+                .lower()
+            )
+
+            timeout_class_indicators = (
+                "timeout",
+                "readtimeouterror",
+                "connecttimeouterror",
+            )
+
+            timeout_message_indicators = (
+                "timed out",
+                "read timeout",
+                "connect timeout",
+                "connection timeout",
+            )
+
+            if any(
+                indicator in class_name
+                for indicator
+                in timeout_class_indicators
+            ):
+                return True
+
+            if any(
+                indicator in message
+                for indicator
+                in timeout_message_indicators
+            ):
+                return True
+
+            current = (
+                current.__cause__
+                or current.__context__
+            )
+
+        return False
