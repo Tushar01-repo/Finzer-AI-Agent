@@ -1,8 +1,14 @@
+import logging
 from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
 from newspaper import Article
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+logger = logging.getLogger(__name__)
 
 
 class ArticleContentExtractor:
@@ -10,18 +16,34 @@ class ArticleContentExtractor:
     Fetches and extracts article content from a publisher URL.
 
     Extraction strategy:
-        1. Fetch article HTML
-        2. Try newspaper3k
-        3. Fall back to BeautifulSoup
+        1. Fetch publisher HTML using requests
+        2. Retry transient HTTP/network failures
+        3. Try newspaper3k extraction
+        4. Fall back to BeautifulSoup
+        5. Validate extracted content
+        6. Return structured success/failure information
+
+    Retries are only intended for transient failures.
+
+    We retry:
+        - Connection failures
+        - Read failures / timeouts
+        - HTTP 429
+        - Selected HTTP 5xx responses
+
+    We do not retry:
+        - HTTP 401
+        - HTTP 403
+        - HTTP 404
+        - Security challenge pages
+        - Insufficient extracted content
 
     This component does not:
         - Resolve Google News URLs
         - Deduplicate articles
         - Store articles
         - Publish messages
-
-    Every extraction result contains structured information
-    describing whether extraction succeeded or why it failed.
+        - Use Playwright/browser automation
     """
 
     HEADERS = {
@@ -38,10 +60,20 @@ class ArticleContentExtractor:
         "Accept-Language": "en-IN,en;q=0.9",
     }
 
+    # These are failures where retrying the same request normally
+    # does not help.
     BLOCKED_STATUS_CODES = {
         401,
         403,
+    }
+
+    # These failures may be temporary and are worth retrying.
+    RETRY_STATUS_CODES = {
         429,
+        500,
+        502,
+        503,
+        504,
     }
 
     MIN_CONTENT_LENGTH = 500
@@ -63,9 +95,53 @@ class ArticleContentExtractor:
     def __init__(
         self,
         timeout: int = 20,
+        retry_count: int = 2,
+        backoff_factor: float = 1.0,
         session: requests.Session | None = None,
     ):
+        """
+        Args:
+            timeout:
+                HTTP request timeout in seconds.
+
+            retry_count:
+                Number of retries after the initial request.
+
+                Example:
+                    retry_count=2
+
+                means at most:
+
+                    initial request
+                    + retry 1
+                    + retry 2
+
+            backoff_factor:
+                Controls exponential delay between retries.
+
+            session:
+                Optional requests.Session, mainly useful for
+                dependency injection/testing.
+        """
+
+        if timeout <= 0:
+            raise ValueError(
+                "timeout must be greater than zero."
+            )
+
+        if retry_count < 0:
+            raise ValueError(
+                "retry_count cannot be negative."
+            )
+
+        if backoff_factor < 0:
+            raise ValueError(
+                "backoff_factor cannot be negative."
+            )
+
         self.timeout = timeout
+        self.retry_count = retry_count
+        self.backoff_factor = backoff_factor
 
         self.session = (
             session
@@ -74,6 +150,52 @@ class ArticleContentExtractor:
 
         self.session.headers.update(
             self.HEADERS
+        )
+
+        self._configure_retries()
+
+    def _configure_retries(self) -> None:
+        """
+        Configure retry behavior for HTTP and HTTPS requests.
+
+        Only GET requests are retried because article extraction
+        performs read-only HTTP operations.
+        """
+
+        retry_strategy = Retry(
+            total=self.retry_count,
+            connect=self.retry_count,
+            read=self.retry_count,
+            status=self.retry_count,
+
+            allowed_methods={
+                "GET",
+            },
+
+            status_forcelist=self.RETRY_STATUS_CODES,
+
+            backoff_factor=self.backoff_factor,
+
+            # Respect Retry-After headers, especially useful for 429.
+            respect_retry_after_header=True,
+
+            # Return the final response after retries are exhausted.
+            # response.raise_for_status() will then classify it below.
+            raise_on_status=False,
+        )
+
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy
+        )
+
+        self.session.mount(
+            "http://",
+            adapter,
+        )
+
+        self.session.mount(
+            "https://",
+            adapter,
         )
 
     def extract(
@@ -96,6 +218,7 @@ class ArticleContentExtractor:
             - security_challenge
             - insufficient_content
             - extraction_error
+            - http_error
         """
 
         result: dict[str, Any] = {
@@ -123,6 +246,10 @@ class ArticleContentExtractor:
             result["status_code"] = (
                 status_code
             )
+
+            # ----------------------------------------------------------
+            # Security / anti-bot challenge detection
+            # ----------------------------------------------------------
 
             if self._contains_security_challenge(
                 html
@@ -240,8 +367,7 @@ class ArticleContentExtractor:
                     return result
 
             # ----------------------------------------------------------
-            # HTML was fetched successfully but usable article content
-            # could not be extracted.
+            # HTML fetched, but article content was insufficient.
             # ----------------------------------------------------------
 
             result["error_type"] = (
@@ -256,11 +382,13 @@ class ArticleContentExtractor:
             return result
 
         except requests.Timeout as exc:
-            result["error_type"] = "timeout"
+            result["error_type"] = (
+                "timeout"
+            )
 
             result["error"] = (
-                f"Publisher request timed out "
-                f"after {self.timeout} seconds: {exc}"
+                f"Publisher request timed out after retries "
+                f"were exhausted: {exc}"
             )
 
             return result
@@ -282,13 +410,16 @@ class ArticleContentExtractor:
                 )
             )
 
-            if (
-                status_code
-                in self.BLOCKED_STATUS_CODES
-            ):
+            if status_code in self.BLOCKED_STATUS_CODES:
                 result["error"] = (
                     f"Publisher returned HTTP "
                     f"{status_code}."
+                )
+
+            elif status_code == 429:
+                result["error"] = (
+                    "Publisher returned HTTP 429 "
+                    "after retries were exhausted."
                 )
 
             elif status_code == 404:
@@ -302,7 +433,8 @@ class ArticleContentExtractor:
             ):
                 result["error"] = (
                     f"Publisher returned server error "
-                    f"HTTP {status_code}."
+                    f"HTTP {status_code} after retries "
+                    f"were exhausted."
                 )
 
             else:
@@ -317,7 +449,10 @@ class ArticleContentExtractor:
                 "connection_error"
             )
 
-            result["error"] = str(exc)
+            result["error"] = (
+                "Publisher connection failed after "
+                f"retries were exhausted: {exc}"
+            )
 
             return result
 
@@ -346,11 +481,21 @@ class ArticleContentExtractor:
         """
         Fetch publisher HTML.
 
+        Retry behavior is handled automatically by the configured
+        requests Session / HTTPAdapter.
+
         Returns:
-            Tuple containing:
-                - response HTML
-                - HTTP status code
+            Tuple:
+                (
+                    response HTML,
+                    final HTTP status code,
+                )
         """
+
+        logger.debug(
+            "Fetching article HTML: url=%s",
+            url,
+        )
 
         response = self.session.get(
             url,
@@ -372,10 +517,15 @@ class ArticleContentExtractor:
     ) -> dict[str, Any] | None:
         """
         Extract article metadata and content using newspaper3k.
+
+        Failure here does not fail the entire extraction because
+        BeautifulSoup is attempted afterwards.
         """
 
         try:
-            article = Article(url)
+            article = Article(
+                url
+            )
 
             article.set_html(
                 html
@@ -416,9 +566,12 @@ class ArticleContentExtractor:
                 or None,
             }
 
-        except Exception:
-            # Failure in newspaper3k should not stop extraction.
-            # BeautifulSoup will be attempted next.
+        except Exception as exc:
+            logger.debug(
+                "newspaper3k extraction failed: %s",
+                exc,
+            )
+
             return None
 
     @staticmethod
@@ -427,7 +580,7 @@ class ArticleContentExtractor:
         html: str,
     ) -> dict[str, Any] | None:
         """
-        Extract article content using BeautifulSoup fallback.
+        Extract article content using BeautifulSoup.
         """
 
         soup = BeautifulSoup(
@@ -435,6 +588,7 @@ class ArticleContentExtractor:
             "html.parser",
         )
 
+        # Remove common non-article elements.
         for element in soup(
             [
                 "script",
@@ -489,8 +643,10 @@ class ArticleContentExtractor:
                 )
             )
         else:
-            paragraphs = soup.find_all(
-                "p"
+            paragraphs = (
+                soup.find_all(
+                    "p"
+                )
             )
 
         text_parts: list[str] = []
@@ -510,7 +666,6 @@ class ArticleContentExtractor:
             if len(text) < 40:
                 continue
 
-            # Avoid duplicated paragraphs.
             normalized_text = (
                 text.lower()
             )
@@ -565,8 +720,8 @@ class ArticleContentExtractor:
         paragraph_count: int,
     ) -> bool:
         """
-        Check whether extracted content is substantial enough
-        to be treated as an article.
+        Determine whether extracted text is substantial enough
+        to represent a real article.
         """
 
         if not content:
@@ -612,7 +767,7 @@ class ArticleContentExtractor:
         html: str,
     ) -> bool:
         """
-        Detect common anti-bot / security challenge pages.
+        Detect common anti-bot/security challenge pages.
         """
 
         if not html:
@@ -623,10 +778,8 @@ class ArticleContentExtractor:
         )
 
         return any(
-            phrase
-            in normalized_html
-            for phrase
-            in self.CHALLENGE_PHRASES
+            phrase in normalized_html
+            for phrase in self.CHALLENGE_PHRASES
         )
 
     def _classify_http_error(
@@ -634,18 +787,18 @@ class ArticleContentExtractor:
         status_code: int | None,
     ) -> str:
         """
-        Convert an HTTP error status into an internal
+        Convert an HTTP status code into an internal
         extraction failure category.
         """
 
-        if (
-            status_code
-            in self.BLOCKED_STATUS_CODES
-        ):
+        if status_code in self.BLOCKED_STATUS_CODES:
             return "blocked"
 
         if status_code == 404:
             return "not_found"
+
+        if status_code == 429:
+            return "request_error"
 
         if (
             status_code is not None
