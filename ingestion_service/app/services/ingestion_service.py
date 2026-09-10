@@ -171,6 +171,7 @@ class IngestionService:
                 "Skipping feed without query: feed_id=%s",
                 feed.get("feed_id"),
             )
+
             return stats
 
         max_articles = feed.get(
@@ -193,6 +194,12 @@ class IngestionService:
             query=query,
             max_articles=max_articles,
         )
+
+        # Discovery statistics must be recorded immediately after
+        # discovery. An article is considered discovered even if
+        # extraction, normalization, persistence, or publishing
+        # later fails.
+        stats["articles_discovered"] = len(articles)
 
         logger.info(
             "Articles discovered: feed_id=%s, count=%d",
@@ -218,8 +225,6 @@ class IngestionService:
                     article,
                     feed,
                 )
-
-                stats["articles_discovered"] += 1
 
                 if result["is_new"]:
                     stats["articles_inserted"] += 1
