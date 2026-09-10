@@ -120,6 +120,103 @@ def sync_feeds() -> int:
     return feed_sync_service.sync()
 
 
+def print_ingestion_stats(
+    stats: dict[str, int],
+) -> None:
+    """
+    Print ingestion statistics in a readable format.
+    """
+
+    print("\nIngestion completed.")
+
+    print(
+        f"Feeds processed:              "
+        f"{stats['feeds_processed']}"
+    )
+
+    print(
+        f"Articles discovered:          "
+        f"{stats['articles_discovered']}"
+    )
+
+    print(
+        f"Articles inserted:            "
+        f"{stats['articles_inserted']}"
+    )
+
+    print(
+        f"Articles updated:             "
+        f"{stats['articles_updated']}"
+    )
+
+    print(
+        f"Articles failed:              "
+        f"{stats['articles_failed']}"
+    )
+
+    print("\nFailure breakdown:")
+
+    print(
+        f"  Blocked:                    "
+        f"{stats['articles_blocked']}"
+    )
+
+    print(
+        f"  Timed out:                  "
+        f"{stats['articles_timed_out']}"
+    )
+
+    print(
+        f"  Not found:                  "
+        f"{stats['articles_not_found']}"
+    )
+
+    print(
+        f"  Server errors:              "
+        f"{stats['articles_server_error']}"
+    )
+
+    print(
+        f"  Security challenges:        "
+        f"{stats['articles_security_challenge']}"
+    )
+
+    print(
+        f"  Insufficient content:       "
+        f"{stats['articles_insufficient_content']}"
+    )
+
+    print(
+        f"  Connection errors:          "
+        f"{stats['articles_connection_error']}"
+    )
+
+    print(
+        f"  Request errors:             "
+        f"{stats['articles_request_error']}"
+    )
+
+    print(
+        f"  HTTP errors:                "
+        f"{stats['articles_http_error']}"
+    )
+
+    print(
+        f"  Extraction errors:          "
+        f"{stats['articles_extraction_error']}"
+    )
+
+    print(
+        f"  Other failures:             "
+        f"{stats['articles_other_failure']}"
+    )
+
+    print(
+        f"\nMessages published:           "
+        f"{stats['messages_published']}"
+    )
+
+
 def main(
     feed_id: str | None = None,
 ) -> None:
@@ -139,7 +236,9 @@ def main(
         )
 
     print("\nInitializing database...")
+
     initialize_database()
+
     print(
         "Database initialized successfully."
     )
@@ -169,38 +268,8 @@ def main(
     else:
         stats = ingestion_service.ingest()
 
-    print(
-        "\nIngestion completed."
-    )
-
-    print(
-        f"Feeds processed:       "
-        f"{stats['feeds_processed']}"
-    )
-
-    print(
-        f"Articles discovered:   "
-        f"{stats['articles_discovered']}"
-    )
-
-    print(
-        f"Articles inserted:     "
-        f"{stats['articles_inserted']}"
-    )
-
-    print(
-        f"Articles updated:      "
-        f"{stats['articles_updated']}"
-    )
-
-    print(
-        f"Articles failed:       "
-        f"{stats['articles_failed']}"
-    )
-
-    print(
-        f"Messages published:    "
-        f"{stats['messages_published']}"
+    print_ingestion_stats(
+        stats
     )
 
 
