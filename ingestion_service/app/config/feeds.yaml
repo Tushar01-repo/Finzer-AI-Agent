@@ -168,6 +168,12 @@ feeds:
     query: "HDFC Bank"
     enabled: true
 
+  - feed_id: company_openai
+    feed_type: company
+    feed_value: openai
+    query: "open ai or chatgpt"
+    enabled: true
+
   # ============================================================
   # MUTUAL FUNDS
   # ============================================================

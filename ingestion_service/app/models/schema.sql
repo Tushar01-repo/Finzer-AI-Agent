@@ -1,3 +1,6 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+
 CREATE TABLE IF NOT EXISTS feeds (
     feed_id VARCHAR(100) PRIMARY KEY,
     feed_type VARCHAR(50) NOT NULL,
@@ -53,6 +56,13 @@ CREATE TABLE IF NOT EXISTS article_feeds (
         REFERENCES feeds(feed_id)
         ON DELETE CASCADE
 );
+
+
+ALTER TABLE articles
+    ADD COLUMN IF NOT EXISTS embedding vector(384);
+
+ALTER TABLE articles
+    ADD COLUMN IF NOT EXISTS embedded_at TIMESTAMPTZ;
 
 
 CREATE INDEX IF NOT EXISTS idx_articles_processing_status

@@ -15,6 +15,7 @@ class ArticleRepository:
     - Update existing articles
     - Retrieve articles
     - Maintain processing status
+    - Persist LLM analysis results
     """
 
     def __init__(self, database: PostgresDatabase):
@@ -161,6 +162,159 @@ class ArticleRepository:
             (status, article_key),
         )
 
+    def save_article_analysis(
+        self,
+        *,
+        article_key: str,
+        is_valid_article: bool,
+        relevance_score: float,
+        is_relevant: bool,
+        relevance_reason: str,
+        summary: str | None,
+        key_facts: list[str],
+        companies_mentioned: list[str],
+        market_impact: str | None,
+        llm_analysis: dict[str, Any],
+    ) -> None:
+        """
+        Persist LLM analysis results for an article.
+
+        All analyzed articles are stored, including:
+        - valid and relevant articles
+        - valid but irrelevant articles
+        - invalid extracted content
+        """
+
+        if not is_valid_article:
+            processing_status = "invalid"
+
+        elif is_relevant:
+            processing_status = "analyzed"
+
+        else:
+            processing_status = "irrelevant"
+
+        query = """
+            UPDATE articles
+            SET
+                is_valid_article = %s,
+                relevance_score = %s,
+                is_relevant = %s,
+                relevance_reason = %s,
+                summary = %s,
+                key_facts = %s,
+                companies_mentioned = %s,
+                market_impact = %s,
+                llm_analysis = %s,
+                analyzed_at = NOW(),
+                processing_status = %s,
+                updated_at = NOW()
+            WHERE article_key = %s
+        """
+
+        params = (
+            is_valid_article,
+            relevance_score,
+            is_relevant,
+            relevance_reason,
+            summary,
+            Json(key_facts),
+            Json(companies_mentioned),
+            market_impact,
+            Json(llm_analysis),
+            processing_status,
+            article_key,
+        )
+
+        self.database.execute(
+            query,
+            params,
+        )
+
+
+    def get_embedding_input(
+        self,
+        article_key: str,
+    ) -> dict[str, Any] | None:
+        """
+        Retrieve the canonical fields used to generate an article embedding.
+
+        The raw article content is intentionally excluded. The embedding is
+        generated from the LLM-cleaned financial representation of the article.
+        """
+
+        query = """
+            SELECT
+                article_key,
+                title,
+                summary,
+                key_facts,
+                market_impact,
+                processing_status,
+                embedding IS NOT NULL AS has_embedding
+            FROM articles
+            WHERE article_key = %s
+        """
+
+        with self.database.connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, (article_key,))
+                row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            "article_key": row[0],
+            "title": row[1],
+            "summary": row[2],
+            "key_facts": row[3] or [],
+            "market_impact": row[4],
+            "processing_status": row[5],
+            "has_embedding": bool(row[6]),
+        }
+
+    def save_embedding(
+        self,
+        *,
+        article_key: str,
+        embedding: list[float],
+        expected_dimension: int = 384,
+    ) -> None:
+        """
+        Persist a pgvector embedding and mark the article as embedded.
+
+        Vector length is validated before the database update so malformed
+        embedding-service responses cannot corrupt article state.
+        """
+
+        if len(embedding) != expected_dimension:
+            raise ValueError(
+                "Unexpected embedding dimension: "
+                f"expected {expected_dimension}, got {len(embedding)}."
+            )
+
+        vector_literal = (
+            "["
+            + ",".join(str(float(value)) for value in embedding)
+            + "]"
+        )
+
+        query = """
+            UPDATE articles
+            SET
+                embedding = %s::vector,
+                embedded_at = NOW(),
+                processing_status = 'embedded',
+                updated_at = NOW()
+            WHERE article_key = %s
+        """
+
+        self.database.execute(
+            query,
+            (vector_literal, article_key),
+        )
+
     def get_pending_articles(
         self,
         limit: int = 100,
@@ -170,7 +324,9 @@ class ArticleRepository:
         """
 
         if limit <= 0:
-            raise ValueError("limit must be greater than zero.")
+            raise ValueError(
+                "limit must be greater than zero."
+            )
 
         query = """
             SELECT
@@ -194,13 +350,22 @@ class ArticleRepository:
 
         with self.database.connect() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(query, (limit,))
+                cursor.execute(
+                    query,
+                    (limit,),
+                )
+
                 rows = cursor.fetchall()
 
-        return [self._to_record(row) for row in rows]
+        return [
+            self._to_record(row)
+            for row in rows
+        ]
 
     @staticmethod
-    def _to_record(row: tuple[Any, ...]) -> ArticleRecord:
+    def _to_record(
+        row: tuple[Any, ...],
+    ) -> ArticleRecord:
         """
         Convert a database row into an ArticleRecord.
         """

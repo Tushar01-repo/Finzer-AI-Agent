@@ -131,89 +131,94 @@ def print_ingestion_stats(
 
     print(
         f"Feeds processed:              "
-        f"{stats['feeds_processed']}"
+        f"{stats.get('feeds_processed', 0)}"
     )
 
     print(
         f"Articles discovered:          "
-        f"{stats['articles_discovered']}"
+        f"{stats.get('articles_discovered', 0)}"
     )
 
     print(
         f"Articles inserted:            "
-        f"{stats['articles_inserted']}"
+        f"{stats.get('articles_inserted', 0)}"
     )
 
     print(
         f"Articles updated:             "
-        f"{stats['articles_updated']}"
+        f"{stats.get('articles_updated', 0)}"
     )
 
     print(
         f"Articles failed:              "
-        f"{stats['articles_failed']}"
+        f"{stats.get('articles_failed', 0)}"
     )
 
     print("\nFailure breakdown:")
 
+    # print(
+    #     f"  Blocked:                    "
+    #     f"{stats['articles_blocked']}"
+    # )
+
     print(
-        f"  Blocked:                    "
-        f"{stats['articles_blocked']}"
+        f"Articles blocked:             "
+        f"{stats.get('articles_blocked', 0)}"
     )
 
     print(
         f"  Timed out:                  "
-        f"{stats['articles_timed_out']}"
+        f"{stats.get('articles_timed_out', 0)}"
     )
 
     print(
         f"  Not found:                  "
-        f"{stats['articles_not_found']}"
+        f"{stats.get('articles_not_found', 0)}"
     )
 
     print(
         f"  Server errors:              "
-        f"{stats['articles_server_error']}"
+        f"{stats.get('articles_server_error', 0)}"
     )
 
     print(
         f"  Security challenges:        "
-        f"{stats['articles_security_challenge']}"
+        f"{stats.get('articles_security_challenge', 0)}"
     )
 
     print(
         f"  Insufficient content:       "
-        f"{stats['articles_insufficient_content']}"
+        f"{stats.get('articles_insufficient_content', 0)}"
     )
 
     print(
         f"  Connection errors:          "
-        f"{stats['articles_connection_error']}"
+        f"{stats.get('articles_connection_error', 0)}"
     )
 
     print(
         f"  Request errors:             "
-        f"{stats['articles_request_error']}"
+        f"{stats.get('articles_request_error', 0)}"
     )
 
     print(
         f"  HTTP errors:                "
-        f"{stats['articles_http_error']}"
+        f"{stats.get('articles_http_error', 0)}"
     )
 
     print(
         f"  Extraction errors:          "
-        f"{stats['articles_extraction_error']}"
+        f"{stats.get('articles_extraction_error', 0)}"
     )
 
     print(
         f"  Other failures:             "
-        f"{stats['articles_other_failure']}"
+        f"{stats.get('articles_other_failure', 0)}"
     )
 
     print(
         f"\nMessages published:           "
-        f"{stats['messages_published']}"
+        f"{stats.get('messages_published', 0)}"
     )
 
 

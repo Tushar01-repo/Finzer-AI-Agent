@@ -1,0 +1,5 @@
+{
+  "host": ["finzer-postgres.cobwu0kkov7o.us-east-1.rds.amazonaws.com"],
+  "portNumber": ["5432"],
+  "localPortNumber": ["5433"]
+}

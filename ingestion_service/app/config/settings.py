@@ -90,5 +90,52 @@ class Settings:
         "article.processing.dlq"
     )
 
+    ARTICLE_RETRY_DELAYS_MS = tuple(
+        int(value.strip())
+        for value in os.getenv(
+            "ARTICLE_RETRY_DELAYS_MS",
+            "30000,120000,600000",
+        ).split(",")
+        if value.strip()
+    )
+
+    ARTICLE_EMBEDDING_QUEUE = os.getenv(
+        "ARTICLE_EMBEDDING_QUEUE",
+        "article.embedding"
+    )
+
+    ARTICLE_EMBEDDING_RETRY_QUEUE = os.getenv(
+        "ARTICLE_EMBEDDING_RETRY_QUEUE",
+        "article.embedding.retry"
+    )
+
+    ARTICLE_EMBEDDING_DLQ = os.getenv(
+        "ARTICLE_EMBEDDING_DLQ",
+        "article.embedding.dlq"
+    )
+
+
+    # ------------------------------------------------------------------
+    # Embedding service
+    # ------------------------------------------------------------------
+
+    EMBEDDING_SERVICE_URL = os.getenv(
+        "EMBEDDING_SERVICE_URL",
+        ""
+    )
+
+    EMBEDDING_REQUEST_TIMEOUT = int(
+        os.getenv("EMBEDDING_REQUEST_TIMEOUT", "60")
+    )
+
+    EMBEDDING_MODEL = os.getenv(
+        "EMBEDDING_MODEL",
+        "sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+    EMBEDDING_DIMENSION = int(
+        os.getenv("EMBEDDING_DIMENSION", "384")
+    )
+
 
 settings = Settings()

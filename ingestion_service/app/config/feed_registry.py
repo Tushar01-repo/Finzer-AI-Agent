@@ -47,6 +47,7 @@ class FeedRegistry:
             "tcs",
             "infosys",
             "hdfc_bank",
+            "openai"
         },
         "mutual_fund": {
             "india",
