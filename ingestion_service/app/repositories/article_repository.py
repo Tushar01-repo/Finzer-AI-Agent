@@ -251,7 +251,11 @@ class ArticleRepository:
                 key_facts,
                 market_impact,
                 processing_status,
-                embedding IS NOT NULL AS has_embedding
+                EXISTS (
+                    SELECT 1
+                    FROM article_embeddings ae
+                    WHERE ae.article_key = articles.article_key
+                ) AS has_embedding
             FROM articles
             WHERE article_key = %s
         """
@@ -279,14 +283,11 @@ class ArticleRepository:
         *,
         article_key: str,
         embedding: list[float],
-        expected_dimension: int = 384,
+        expected_dimension: int = 1024,
+        embedding_model: str | None = None,
+        embedding_provider: str | None = None,
     ) -> None:
-        """
-        Persist a pgvector embedding and mark the article as embedded.
-
-        Vector length is validated before the database update so malformed
-        embedding-service responses cannot corrupt article state.
-        """
+        """Persist the current article vector in article_embeddings."""
 
         if len(embedding) != expected_dimension:
             raise ValueError(
@@ -294,26 +295,43 @@ class ArticleRepository:
                 f"expected {expected_dimension}, got {len(embedding)}."
             )
 
-        vector_literal = (
-            "["
-            + ",".join(str(float(value)) for value in embedding)
-            + "]"
-        )
+        vector_literal = "[" + ",".join(str(float(value)) for value in embedding) + "]"
+        model = embedding_model or "unknown"
+        provider = embedding_provider or "unknown"
 
         query = """
-            UPDATE articles
-            SET
-                embedding = %s::vector,
-                embedded_at = NOW(),
-                processing_status = 'embedded',
-                updated_at = NOW()
-            WHERE article_key = %s
+            INSERT INTO article_embeddings (
+                article_key,
+                embedding,
+                embedding_model,
+                embedding_provider,
+                embedding_dimension,
+                embedded_at
+            )
+            VALUES (%s, %s::vector, %s, %s, %s, NOW())
+            ON CONFLICT (article_key)
+            DO UPDATE SET
+                embedding = EXCLUDED.embedding,
+                embedding_model = EXCLUDED.embedding_model,
+                embedding_provider = EXCLUDED.embedding_provider,
+                embedding_dimension = EXCLUDED.embedding_dimension,
+                embedded_at = NOW()
         """
 
-        self.database.execute(
-            query,
-            (vector_literal, article_key),
-        )
+        with self.database.connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    query,
+                    (article_key, vector_literal, model, provider, expected_dimension),
+                )
+                cursor.execute(
+                    """
+                    UPDATE articles
+                    SET processing_status = 'embedded', updated_at = NOW()
+                    WHERE article_key = %s
+                    """,
+                    (article_key,),
+                )
 
     def get_pending_articles(
         self,

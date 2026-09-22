@@ -7,3 +7,5 @@ PyYAML
 psycopg[binary]
 pika
 python-dotenv
+openai
+boto3

@@ -267,9 +267,11 @@ class ArticleProcessingWorker:
             f"Embedding queue: {self.embedding_queue_name}"
         )
 
-        print(
-            f"LLM: {self.analyzer.base_url}"
-        )
+        # print(
+        #     f"LLM: {self.analyzer.base_url}"
+        # )
+
+        print("LLM: configured through LLM Router")
 
         print(
             "Relevance threshold: "

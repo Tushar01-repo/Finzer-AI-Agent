@@ -3,7 +3,7 @@ import signal
 from typing import Any
 
 import pika
-import requests
+from app.clients.embedding_router import EmbeddingRouter
 
 from app.config.settings import settings
 from app.queue.queue_topology import QueueTopology
@@ -25,16 +25,10 @@ class ArticleEmbeddingWorker:
         self,
         rabbitmq_url: str | None = None,
         queue_name: str | None = None,
-        embedding_service_url: str | None = None,
     ):
         self.rabbitmq_url = rabbitmq_url or settings.RABBITMQ_URL
         self.queue_name = queue_name or settings.ARTICLE_EMBEDDING_QUEUE
-        self.embedding_service_url = (
-            embedding_service_url or settings.EMBEDDING_SERVICE_URL
-        )
-        self.embedding_timeout = settings.EMBEDDING_REQUEST_TIMEOUT
         self.embedding_dimension = settings.EMBEDDING_DIMENSION
-        self.embedding_model = settings.EMBEDDING_MODEL
         self.retry_router = RetryRouter(
             retry_queue_prefix=settings.ARTICLE_EMBEDDING_RETRY_QUEUE,
             dlq=settings.ARTICLE_EMBEDDING_DLQ,
@@ -45,11 +39,12 @@ class ArticleEmbeddingWorker:
             raise ValueError("RABBITMQ_URL is not configured.")
         if not self.queue_name:
             raise ValueError("ARTICLE_EMBEDDING_QUEUE is not configured.")
-        if not self.embedding_service_url:
-            raise ValueError("EMBEDDING_SERVICE_URL is not configured.")
         if self.embedding_dimension <= 0:
             raise ValueError("EMBEDDING_DIMENSION must be greater than zero.")
 
+        self.embedding_client = EmbeddingRouter()
+        self.embedding_model = self.embedding_client.model
+        self.embedding_provider = self.embedding_client.provider
         self.database = PostgresDatabase()
         self.repository = ArticleRepository(self.database)
 
@@ -106,36 +101,7 @@ class ArticleEmbeddingWorker:
         return text
 
     def _generate_embedding(self, text: str) -> list[float]:
-        response = requests.post(
-            self.embedding_service_url,
-            json={"texts": [text]},
-            timeout=self.embedding_timeout,
-        )
-        response.raise_for_status()
-
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise ValueError("Embedding service returned invalid JSON.") from exc
-
-        embeddings = payload.get("embeddings") if isinstance(payload, dict) else None
-        if not isinstance(embeddings, list) or not embeddings:
-            raise ValueError("Embedding service response has no embeddings.")
-
-        vector = embeddings[0]
-        if not isinstance(vector, list):
-            raise ValueError("Embedding service returned an invalid vector.")
-
-        if len(vector) != self.embedding_dimension:
-            raise ValueError(
-                "Embedding dimension mismatch: "
-                f"expected {self.embedding_dimension}, got {len(vector)}."
-            )
-
-        try:
-            return [float(value) for value in vector]
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Embedding vector contains non-numeric values.") from exc
+        return self.embedding_client.embed(text)
 
     @staticmethod
     def _safe_ack(channel, delivery_tag) -> bool:
@@ -210,7 +176,7 @@ class ArticleEmbeddingWorker:
 
             text = self._build_embedding_text(article)
             print(f"Embedding input length: {len(text)}")
-            print("Sending article to embedding service...")
+            print(f"Sending article to {self.embedding_provider} embeddings...")
 
             embedding = self._generate_embedding(text)
             print(f"Embedding dimension: {len(embedding)}")
@@ -219,23 +185,13 @@ class ArticleEmbeddingWorker:
                 article_key=article_key,
                 embedding=embedding,
                 expected_dimension=self.embedding_dimension,
+                embedding_model=self.embedding_model,
+                embedding_provider=self.embedding_provider,
             )
 
             print("Embedding saved to PostgreSQL.")
             print("Status: embedded")
             self._safe_ack(channel, delivery_tag)
-
-        except requests.RequestException as exc:
-            print(f"Embedding service request failed: {exc}")
-            outcome = self.retry_router.route_failure(
-                channel,
-                delivery_tag=delivery_tag,
-                properties=properties,
-                body=body,
-                retryable=True,
-                error=exc,
-            )
-            print(f"Embedding failure routed to {outcome}.")
 
         except Exception as exc:
             print(f"Embedding processing failed: {exc}")
@@ -265,7 +221,7 @@ class ArticleEmbeddingWorker:
         print("Finzer Article Embedding Worker")
         print("=" * 70)
         print(f"Queue: {self.queue_name}")
-        print(f"Embedding service: {self.embedding_service_url}")
+        print(f"Embedding provider: {self.embedding_provider} (session locked)")
         print(f"Model: {self.embedding_model}")
         print(f"Dimension: {self.embedding_dimension}")
         print()
