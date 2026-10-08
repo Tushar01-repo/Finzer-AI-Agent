@@ -1,0 +1,243 @@
+(venv) PS C:\Users\paltu\Finzer-AI-Agent\ingestion_service> python .\test_document_retrieval_quality.py
+================================================================================
+Finzer - Document Retrieval Quality Test
+================================================================================
+
+Document key:
+3adccc083d26e3b574fb187d92c87e80be56adee2060c285eb45049c5dae85b5
+
+Queries: 5
+Top K: 5
+
+Initializing retriever...
+Checking embedding provider: bedrock...
+Embedding provider bedrock unavailable: AccessDeniedException: An error occurred (AccessDeniedException) when calling the InvokeModel operation: Authentication failed: Please make sure your API Key is valid.
+Checking embedding provider: openai...
+Embedding provider selected and locked: openai (text-embedding-3-small)
+Provider  : openai
+Model     : text-embedding-3-small
+Dimension : 1024
+
+================================================================================
+QUERY 1/5
+================================================================================
+
+What are the major risks associated with the company?
+
+#1  score=0.5775 | chunk=26 | index=23 | type=text | pages=13-13
+    section    = 8. Risk Factors
+    subsection = None
+    heading    = None
+    preview    = Section: 8. Risk Factors For further details, investors are advised to carefully read “Risk Factors” beginning on page 30 of the Draft Red Herring Prospectus, to have an informed view before making an investment decision in the Offer.
+
+#2  score=0.5488 | chunk=25 | index=22 | type=text | pages=12-13
+    section    = 8. Risk Factors
+    subsection = None
+    heading    = None
+    preview    = Section: 8. Risk Factors The following are the top 10 internal risk factors as disclosed in theDRHP: • We primarily derive our revenue from the sale of HSAW pipes to EPC contractors engaged in Government-funded water transmission and urban infrastructure projects. Our revenue from such sale to EPC 
+
+#3  score=0.4803 | chunk=31 | index=28 | type=text | pages=15-17
+    section    = 12. Summary of outstanding litigation
+    subsection = None
+    heading    = None
+    preview    = Section: 12. Summary of outstanding litigation A summary of outstanding litigation proceedings involving our Company, our Directors and our Promoters as on the date of the Draft Red Herring Prospectus is provided below: (₹ in millions) Nature of Cases Number of outstanding cases Amount Involved* Lit
+
+#4  score=0.4593 | chunk=3 | index=0 | type=text | pages=1-2
+    section    = None
+    subsection = None
+    heading    = None
+    preview    = Hi-Tech Flow Solutions Limited (formerly known as Hitech Saw Limited) Corporate identity number: U74899DL1993PLC053185 WEBSITE REGISTERED OFFICE CONTACT PERSON EMAIL AND TELEPHONE www.hitechflow.in Divya Company Secretary and Compliance Officer E-mail: cs@hitechflow.in Telephone: +91 11 4506 9006 SF
+
+#5  score=0.4466 | chunk=13 | index=10 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = g) Business Strengths and Strategies
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: g) Business Strengths and Strategies Business Strengths • Hi-Tech Group synergies supporting raw material availability • Manufacturing infrastructure supported by strategic location with supply chain efficiencies • Positioned to take advantage 
+
+
+================================================================================
+QUERY 2/5
+================================================================================
+
+What is the company's primary business?
+
+#1  score=0.5730 | chunk=13 | index=10 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = g) Business Strengths and Strategies
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: g) Business Strengths and Strategies Business Strengths • Hi-Tech Group synergies supporting raw material availability • Manufacturing infrastructure supported by strategic location with supply chain efficiencies • Positioned to take advantage 
+
+#2  score=0.5405 | chunk=7 | index=4 | type=text | pages=4-4
+    section    = 1. Summary of the primary business
+    subsection = b) Industries Served and Typical Customers / Clients
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: b) Industries Served and Typical Customers / Clients Our products primarily serve large-diameter water-transmission pipelines used in bulk water- supplysystems, irrigation networks, inter-basin river-link pipelines, municipal water distributio
+
+#3  score=0.5360 | chunk=6 | index=3 | type=text | pages=4-4
+    section    = 1. Summary of the primary business
+    subsection = a) Business Overview - Products and Services
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: a) Business Overview - Products and Services We provide flow solution products having varied applications by manufacturing and supplying Helical Submerged Arc Welded (“HSAW”) pipes across 17 states and 2 union territories in India, through our 
+
+#4  score=0.5288 | chunk=10 | index=7 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = d) Key Geographies Served
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: d) Key Geographies Served We supply ourproducts across 17 states and 2 union territories in India through our Manufacturing Facilities at Sanand, Gujarat and Nagpur, Maharashtra. We have limited export operations to date, having executed expor
+
+#5  score=0.5137 | chunk=12 | index=9 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = f) Key Manufacturing or Other Facilities
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: f) Key Manufacturing or Other Facilities As on the date of the Draft Red Herring Prospectus, our Company operates two Manufacturing Facilities; (i) Sanand Facility; and (ii) Nagpur Facility, for the production of HSAW pipes.
+
+
+================================================================================
+QUERY 3/5
+================================================================================
+
+What are the company's competitive strengths?
+
+#1  score=0.5857 | chunk=13 | index=10 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = g) Business Strengths and Strategies
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: g) Business Strengths and Strategies Business Strengths • Hi-Tech Group synergies supporting raw material availability • Manufacturing infrastructure supported by strategic location with supply chain efficiencies • Positioned to take advantage 
+
+#2  score=0.4365 | chunk=9 | index=6 | type=table | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = e) Revenue Concentration among Top 5 Customers
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: e) Revenue Concentration among Top 5 Customers | Particulars | | Fiscal 2026 | | | Fiscal 2025 | | | Fiscal 2024 | | | --- | --- | --- | --- | --- | ---| --- | --- | --- | --- | | | Amount (in ₹ million) | Amount | % of | Amount (in ₹ million)
+
+#3  score=0.4030 | chunk=25 | index=22 | type=text | pages=12-13
+    section    = 8. Risk Factors
+    subsection = None
+    heading    = None
+    preview    = Section: 8. Risk Factors The following are the top 10 internal risk factors as disclosed in theDRHP: • We primarily derive our revenue from the sale of HSAW pipes to EPC contractors engaged in Government-funded water transmission and urban infrastructure projects. Our revenue from such sale to EPC 
+
+#4  score=0.3964 | chunk=11 | index=8 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = e) Revenue Concentration among Top 5 Customers
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: e) Revenue Concentration among Top 5 Customers The table below sets forth details of revenue from operations generated from the top five customers during the periods indicated: Particulars Fiscal 2026 Fiscal 2025 Fiscal 2024 Amount % of Amount 
+
+#5  score=0.3799 | chunk=12 | index=9 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = f) Key Manufacturing or Other Facilities
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: f) Key Manufacturing or Other Facilities As on the date of the Draft Red Herring Prospectus, our Company operates two Manufacturing Facilities; (i) Sanand Facility; and (ii) Nagpur Facility, for the production of HSAW pipes.
+
+
+================================================================================
+QUERY 4/5
+================================================================================
+
+What are the objects or purpose of the IPO issue?
+
+#1  score=0.5771 | chunk=18 | index=15 | type=text | pages=7-8
+    section    = 4. Objects of the Offer
+    subsection = None
+    heading    = None
+    preview    = Section: 4. Objects of the Offer Our Company proposes to utilise the Net Proceeds towards funding the following objects: 1,259.69 Particulars Amount (in ₹ million) Funding the proposed expansion by setting upAPI-grade HSAW pipe manufacturing unit along with a 3LPE coating unit within our existing N
+
+#2  score=0.4719 | chunk=5 | index=2 | type=text | pages=3-4
+    section    = None
+    subsection = None
+    heading    = None
+    preview    = (1)Our Company may, in consultation with the BRLMs, consider participation by Anchor Investors in accordance with the SEBI ICDR Regulations. The Anchor Investor Bidding Date shall be one Working Day prior to the Bid/Offer Opening Date. (2)Our Company may, in consultation with the BRLMs, consider clo
+
+#3  score=0.4718 | chunk=4 | index=1 | type=text | pages=2-2
+    section    = None
+    subsection = None
+    heading    = None
+    preview    = GENERAL RISK Investments in equity and equity-related securities involve a degree of risk and investors should not invest any funds in the Offer unless they can afford to take the risk of losing their entire investment. Investors are advised to read the risk factors carefully before taking an invest
+
+#4  score=0.4418 | chunk=3 | index=0 | type=text | pages=1-2
+    section    = None
+    subsection = None
+    heading    = None
+    preview    = Hi-Tech Flow Solutions Limited (formerly known as Hitech Saw Limited) Corporate identity number: U74899DL1993PLC053185 WEBSITE REGISTERED OFFICE CONTACT PERSON EMAIL AND TELEPHONE www.hitechflow.in Divya Company Secretary and Compliance Officer E-mail: cs@hitechflow.in Telephone: +91 11 4506 9006 SF
+
+#5  score=0.4128 | chunk=31 | index=28 | type=text | pages=15-17
+    section    = 12. Summary of outstanding litigation
+    subsection = None
+    heading    = None
+    preview    = Section: 12. Summary of outstanding litigation A summary of outstanding litigation proceedings involving our Company, our Directors and our Promoters as on the date of the Draft Red Herring Prospectus is provided below: (₹ in millions) Nature of Cases Number of outstanding cases Amount Involved* Lit
+
+
+================================================================================
+QUERY 5/5
+================================================================================
+
+What outstanding litigation does the company have?
+
+#1  score=0.7145 | chunk=29 | index=26 | type=table | pages=15-15
+    section    = 12. Summary of outstanding litigation
+    subsection = None
+    heading    = None
+    preview    = Section: 12. Summary of outstanding litigation | Nature of Cases | Number of | Amount | | --- |--- | --- | | | outstanding cases | Involved* | | Litigation involving our Company | | |
+
+#2  score=0.6200 | chunk=32 | index=29 | type=table | pages=16-16
+    section    = 12. Summary of outstanding litigation
+    subsection = None
+    heading    = None
+    preview    = Section: 12. Summary of outstanding litigation | Nature of Cases | Number of | Amount | | --- |--- | --- | | | outstanding cases | Involved* |
+
+#3  score=0.5331 | chunk=31 | index=28 | type=text | pages=15-17
+    section    = 12. Summary of outstanding litigation
+    subsection = None
+    heading    = None
+    preview    = Section: 12. Summary of outstanding litigation A summary of outstanding litigation proceedings involving our Company, our Directors and our Promoters as on the date of the Draft Red Herring Prospectus is provided below: (₹ in millions) Nature of Cases Number of outstanding cases Amount Involved* Lit
+
+#4  score=0.3678 | chunk=13 | index=10 | type=text | pages=5-5
+    section    = 1. Summary of the primary business
+    subsection = g) Business Strengths and Strategies
+    heading    = None
+    preview    = Section: 1. Summary of the primary business Subsection: g) Business Strengths and Strategies Business Strengths • Hi-Tech Group synergies supporting raw material availability • Manufacturing infrastructure supported by strategic location with supply chain efficiencies • Positioned to take advantage 
+
+#5  score=0.3663 | chunk=25 | index=22 | type=text | pages=12-13
+    section    = 8. Risk Factors
+    subsection = None
+    heading    = None
+    preview    = Section: 8. Risk Factors The following are the top 10 internal risk factors as disclosed in theDRHP: • We primarily derive our revenue from the sale of HSAW pipes to EPC contractors engaged in Government-funded water transmission and urban infrastructure projects. Our revenue from such sale to EPC 
+
+
+================================================================================
+SUMMARY
+================================================================================
+
+1. What are the major risks associated with the company?
+   Top score   : 0.5775
+   Top section : 8. Risk Factors
+   Top pages   : 13-13
+   Top chunk   : 26
+
+2. What is the company's primary business?
+   Top score   : 0.5730
+   Top section : 1. Summary of the primary business
+   Top pages   : 5-5
+   Top chunk   : 13
+
+3. What are the company's competitive strengths?
+   Top score   : 0.5857
+   Top section : 1. Summary of the primary business
+   Top pages   : 5-5
+   Top chunk   : 13
+
+4. What are the objects or purpose of the IPO issue?
+   Top score   : 0.5771
+   Top section : 4. Objects of the Offer
+   Top pages   : 7-8
+   Top chunk   : 18
+
+5. What outstanding litigation does the company have?
+   Top score   : 0.7145
+   Top section : 12. Summary of outstanding litigation
+   Top pages   : 15-15
+   Top chunk   : 29
+
+================================================================================
+DOCUMENT RETRIEVAL QUALITY TEST COMPLETED
+================================================================================
+(venv) PS C:\Users\paltu\Finzer-AI-Agent\ingestion_service> 
