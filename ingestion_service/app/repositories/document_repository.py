@@ -153,6 +153,81 @@ class DocumentRepository:
 
         return int(row[0])
 
+    def search_documents(
+        self,
+        *,
+        company_name: str | None = None,
+        document_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Find RAG-ready documents using their indexed metadata.
+
+        Returns metadata only, never document text or embeddings.
+        All user-provided filters are parameterized.
+        """
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be an integer between 1 and 500.")
+
+        if company_name is not None and not isinstance(company_name, str):
+            raise ValueError("company_name must be a string or None.")
+        if document_type is not None and not isinstance(document_type, str):
+            raise ValueError("document_type must be a string or None.")
+
+        conditions = ["status = %s"]
+        params: list[Any] = ["embedded"]
+
+        if company_name and company_name.strip():
+            # Treat company names as literal text, not LIKE wildcards.
+            escaped = (
+                company_name.strip()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            conditions.append("company_name ILIKE %s ESCAPE '\\'")
+            params.append(f"%{escaped}%")
+
+        if document_type and document_type.strip():
+            conditions.append("UPPER(document_type) = %s")
+            params.append(document_type.strip().upper())
+
+        where_clause = " AND ".join(conditions)
+        query = f"""
+            SELECT
+                document_id,
+                document_key,
+                source,
+                company_name,
+                document_type,
+                source_title,
+                published_at,
+                status
+            FROM documents
+            WHERE {where_clause}
+            ORDER BY published_at DESC NULLS LAST, document_id DESC
+            LIMIT %s
+        """
+        params.append(limit)
+
+        with self.database.connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query, tuple(params))
+                rows = cursor.fetchall()
+
+        return [
+            {
+                "document_id": row[0],
+                "document_key": row[1],
+                "source": row[2],
+                "company_name": row[3],
+                "document_type": row[4],
+                "source_title": row[5],
+                "published_at": row[6].isoformat() if row[6] is not None else None,
+                "status": row[7],
+            }
+            for row in rows
+        ]
+
     def get_by_key(
         self,
         document_key: str,

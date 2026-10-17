@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, Protocol
+from functools import wraps
+from time import perf_counter
+
+from app.observability.logger import get_logger
+from app.observability.metrics import metrics
+from app.observability.tracing import trace_span
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -120,6 +126,51 @@ class NewsRAGBackend(Protocol):
         ...
 
 
+# Observability deliberately excludes query text, company names, and article content.
+_news_log = get_logger("finzer.tools.news_rag")
+
+
+def _observe_news_rag(func):
+    @wraps(func)
+    def wrapped(self, *, query: str, top_k: int = 5,
+                company: str | None = None,
+                published_after: str | None = None,
+                published_before: str | None = None) -> NewsRAGResponse:
+        started = perf_counter()
+        outcome = "error"
+        source_count = 0
+        try:
+            with trace_span("news_rag_retrieve"):
+                response = func(
+                    self, query=query, top_k=top_k, company=company,
+                    published_after=published_after,
+                    published_before=published_before,
+                )
+                if response.status == "success" and response.data is not None:
+                    outcome = "success"
+                    source_count = len(response.data.sources)
+                return response
+        except Exception as exc:
+            try:
+                _news_log.error("news_rag_exception", error_type=type(exc).__name__)
+            except Exception:
+                pass
+            raise
+        finally:
+            # Telemetry must not alter retrieval results or failure handling.
+            try:
+                metrics.record_latency("rag", (perf_counter() - started) * 1000)
+                metrics.record_operation("rag", outcome)
+                _news_log.info(
+                    "news_rag_completed", outcome=outcome,
+                    source_count=source_count,
+                    empty_retrieval=(outcome == "success" and source_count == 0),
+                )
+            except Exception:
+                pass
+    return wrapped
+
+
 class NewsRAGTool:
     """
     Agent-facing financial news RAG tool.
@@ -139,6 +190,7 @@ class NewsRAGTool:
     ) -> None:
         self.backend = backend
 
+    @_observe_news_rag
     def execute(
         self,
         *,

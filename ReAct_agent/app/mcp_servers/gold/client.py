@@ -957,23 +957,37 @@ class GoldPriceClient:
         if value is None:
             return None
 
-        text = str(
-            value
-        ).strip()
+        text = str(value).strip()
 
         if not text:
             return None
 
         if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+
+        # Python 3.10.1 requires normalization of
+        # variable-length fractional seconds.
+        import re
+
+        match = re.fullmatch(
+            r"(.+?\.)(\d+)(Z|[+-]\d{2}:\d{2})?",
+            text,
+        )
+
+        if match:
+            prefix, fraction, timezone = match.groups()
+
+            # Pad to six digits, or truncate excess precision.
+            fraction = fraction[:6].ljust(6, "0")
+
             text = (
-                text[:-1]
-                + "+00:00"
+                prefix
+                + fraction
+                + (timezone or "")
             )
 
         try:
-            return datetime.fromisoformat(
-                text
-            )
+            return datetime.fromisoformat(text)
 
         except ValueError as exc:
             raise GoldPriceAPIResponseError(

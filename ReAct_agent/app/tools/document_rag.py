@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, Protocol
+from functools import wraps
+from time import perf_counter
+
+from app.observability.logger import get_logger
+from app.observability.metrics import metrics
+from app.observability.tracing import trace_span
 
 from pydantic import BaseModel, Field
 
@@ -145,6 +151,51 @@ class DocumentRAGBackend(Protocol):
         ...
 
 
+# Observability deliberately excludes queries, document keys, and source content.
+_document_log = get_logger("finzer.tools.document_rag")
+
+
+def _observe_document_rag(func):
+    @wraps(func)
+    def wrapped(self, *, query: str, document_key: str, top_k: int = 5,
+                max_context_tokens: int = 4000) -> DocumentRAGResponse:
+        started = perf_counter()
+        outcome = "error"
+        source_count = 0
+        try:
+            with trace_span("document_rag_retrieve"):
+                response = func(
+                    self,
+                    query=query,
+                    document_key=document_key,
+                    top_k=top_k,
+                    max_context_tokens=max_context_tokens,
+                )
+                if response.status == "success" and response.data is not None:
+                    outcome = "success"
+                    source_count = len(response.data.sources)
+                return response
+        except Exception as exc:
+            _document_log.error(
+                "document_rag_exception", error_type=type(exc).__name__
+            )
+            raise
+        finally:
+            # Do not let telemetry exceptions change retrieval behavior.
+            try:
+                metrics.record_latency("rag", (perf_counter() - started) * 1000)
+                metrics.record_operation("rag", outcome)
+                _document_log.info(
+                    "document_rag_completed",
+                    outcome=outcome,
+                    source_count=source_count,
+                    empty_retrieval=(outcome == "success" and source_count == 0),
+                )
+            except Exception:
+                pass
+    return wrapped
+
+
 # ======================================================================
 # Document RAG Tool
 # ======================================================================
@@ -158,6 +209,7 @@ class DocumentRAGTool:
     ):
         self.backend = backend
 
+    @_observe_document_rag
     def execute(
         self,
         *,

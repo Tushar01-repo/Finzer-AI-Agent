@@ -1,5 +1,5 @@
-
-"""Functional tests for Finzer Entity Resolver — Phase 3.3.
+﻿
+"""Functional tests for Finzer Entity Resolver â€” Phase 3.3.
 
 Run:
     python -m pytest .\\test_entity_resolver.py -v
@@ -271,3 +271,4 @@ def test_unknown_explicit_fund_not_reused(
 
     assert result.status != ResolutionStatus.RESOLVED
     assert result.entity is None
+

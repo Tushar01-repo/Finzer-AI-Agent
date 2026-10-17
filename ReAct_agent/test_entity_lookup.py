@@ -1,7 +1,7 @@
-
+﻿
 """Functional tests for Finzer Entity Lookup Service.
 
-Phase 3.4 — Mutual Fund Canonical Lookup
+Phase 3.4 â€” Mutual Fund Canonical Lookup
 
 Run:
     python -m pytest .\\test_entity_lookup.py -v
@@ -14,7 +14,7 @@ import copy
 
 import pytest
 
-from app.agent.entity_lookup import (
+from app.agent.entities import (
     EntityLookupService,
     LookupStatus,
 )
@@ -284,3 +284,4 @@ def test_lookup_does_not_mutate_response(
     )
 
     assert response == before
+
