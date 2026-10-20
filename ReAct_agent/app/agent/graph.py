@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal, Protocol, TypedDict
+import json
 from functools import wraps
 from time import perf_counter
 from typing import Callable, TypeVar
@@ -163,8 +164,8 @@ class ReActGraph:
         decision_model: DecisionModel,
         tool_executor: ToolExecutor,
         context_manager: ContextManager | None = None,
-        max_steps: int = 8,
-        max_tool_calls: int = 5,
+        max_steps: int = 16,
+        max_tool_calls: int = 12,
         policy_engine: GovernancePolicyEngine | None = None,
         approval_manager: ApprovalManager | None = None,
         audit_logger: GovernanceAuditLogger | None = None,
@@ -189,6 +190,7 @@ class ReActGraph:
         self.checkpointer = checkpointer
         # Versions are checked against PostgreSQL on every checkpoint save.
         self._checkpoint_versions: dict[str, int] = {}
+        self._read_call_cache: dict[str, set[str]] = {}
 
         # Graph and executor must share the same approval manager.
         if not hasattr(tool_executor, "approval_manager"):
@@ -267,6 +269,44 @@ class ReActGraph:
         state.pending_tool_call = None
         state.execution_status = ExecutionStatus.FAILED
 
+    @staticmethod
+    def _read_evidence(state: AgentState) -> str:
+        """Summarize verified results without pretending old NAVs are current."""
+        lines = []
+        seen = set()
+        for obs in state.observations:
+            if obs.status != ObservationStatus.SUCCESS or not isinstance(obs.data, dict):
+                continue
+            envelope = obs.data
+            if envelope.get("historical_context_only"):
+                continue
+            if envelope.get("status") != "success":
+                continue
+            data = envelope.get("data")
+            if obs.tool_name == "get_latest_nav" and isinstance(data, dict):
+                code = data.get("scheme_code")
+                if code in seen:
+                    continue
+                seen.add(code)
+                lines.append(f"- {data.get('scheme_name', 'Unknown fund')} (scheme {code}): "
+                             f"NAV {data.get('nav', 'unavailable')}, dated {data.get('date', 'unknown')}")
+        return "\n".join(lines)
+
+    def _finish_with_partial(self, state: AgentState, reason: str) -> None:
+        evidence = self._read_evidence(state)
+        if evidence:
+            state.final_answer = ("I could verify the following NAV results:\n" + evidence +
+                                  "\n\nI could not complete every requested lookup (" + reason +
+                                  "). These NAV dates may be historical; I have not verified that "
+                                  "the schemes are currently active.")
+            state.next_action = NextAction.FINISH
+            state.pending_tool_call = None
+            state.execution_status = ExecutionStatus.COMPLETED
+            state.messages.append(ConversationMessage(role=MessageRole.ASSISTANT,
+                                                      content=state.final_answer))
+        else:
+            self._fail(state, "TOOL_LIMIT" if "tool" in reason else "STEP_LIMIT", reason)
+
     @_observe_graph_operation("agent_decide")
     def _checkpointed_decide(self, graph_state: _GraphState) -> _GraphState:
         result = self._decide(graph_state)
@@ -285,19 +325,11 @@ class ReActGraph:
         state = graph_state["agent"].model_copy(deep=True)
 
         if state.step_count >= self.max_steps:
-            self._fail(
-                state,
-                "STEP_LIMIT",
-                "Maximum reasoning steps reached",
-            )
+            self._finish_with_partial(state, "reasoning step limit reached")
             return {"agent": state}
 
         if state.tool_call_count >= self.max_tool_calls:
-            self._fail(
-                state,
-                "TOOL_LIMIT",
-                "Maximum tool calls reached",
-            )
+            self._finish_with_partial(state, "tool call limit reached")
             return {"agent": state}
 
         state.step_count += 1
@@ -337,10 +369,25 @@ class ReActGraph:
                     f"Unknown tool: {decision.tool_name}",
                 )
             else:
+                # Normalize before creating the ToolCall: the exact same
+                # arguments must be bound to approval and eventual execution.
+                arguments = dict(decision.arguments)
+                if decision.tool_name in {
+                    "wishlist_add", "wishlist_remove", "wishlist_check"
+                }:
+                    asset_id = arguments.get("asset_id")
+                    if isinstance(asset_id, int) and not isinstance(asset_id, bool):
+                        arguments["asset_id"] = str(asset_id)
+
                 call = ToolCall(
                     tool_name=decision.tool_name or "",
-                    arguments=decision.arguments,
+                    arguments=arguments,
                 )
+                if contract.operation == ToolOperation.READ:
+                    fingerprint = json.dumps([call.tool_name, call.arguments], sort_keys=True, default=str)
+                    if fingerprint in self._read_call_cache.get(state.run_id, set()):
+                        self._finish_with_partial(state, "the agent repeated an identical READ request")
+                        return {"agent": state}
                 state.pending_tool_call = call
                 self._authorize_or_pause(state, call)
 
@@ -476,11 +523,7 @@ class ReActGraph:
             return
 
         if state.tool_call_count >= self.max_tool_calls:
-            self._fail(
-                state,
-                "TOOL_LIMIT",
-                "Maximum tool calls reached",
-            )
+            self._finish_with_partial(state, "tool call limit reached")
             return
 
         contract = get_tool_contract(call.tool_name)
@@ -538,6 +581,10 @@ class ReActGraph:
                     "Verified write executor unavailable",
                 )
                 return
+
+        if contract.operation == ToolOperation.READ:
+            fingerprint = json.dumps([call.tool_name, call.arguments], sort_keys=True, default=str)
+            self._read_call_cache.setdefault(state.run_id, set()).add(fingerprint)
 
         state.tool_call_count += 1
 
@@ -597,6 +644,20 @@ class ReActGraph:
         )
 
         state.observations.append(observation)
+
+        # Never re-plan or automatically request another approval after an
+        # approved WRITE fails. The backend outcome can be uncertain.
+        if (
+            contract.operation == ToolOperation.WRITE
+            and observation.status == ObservationStatus.ERROR
+        ):
+            self._fail(
+                state,
+                "WRITE_EXECUTION_FAILED",
+                "Approved write failed or has an uncertain outcome. "
+                "Check the backend state before submitting a new request.",
+            )
+            return
 
         # Change the action before clearing the pending tool call.
         # AgentState validates every field assignment.

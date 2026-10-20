@@ -186,7 +186,24 @@ class FinzerToolExecutor:
                 raise ToolExecutionError("MCP connection is not configured")
             if not contract.server_name:
                 raise ToolExecutionError(f"Missing MCP server for {tool_name}")
+            # Diagnostic logging is intentionally restricted to this READ tool.
+            # Avoid logging credentials or sensitive arguments from other tools.
+            if tool_name == "search_mutual_funds":
+                print(
+                    "[MF MCP REQUEST]",
+                    f"server={contract.server_name}",
+                    f"arguments={arguments!r}",
+                    flush=True,
+                )
+
             result = self.mcp_call(contract.server_name, tool_name, arguments)
+
+            if tool_name == "search_mutual_funds":
+                print(
+                    "[MF MCP RESPONSE]",
+                    f"result={result!r}"[:2000],
+                    flush=True,
+                )
         elif contract.transport == ToolTransport.LOCAL:
             tool = self._local_tool(tool_name)
             inspect.signature(tool.execute).bind(**arguments)

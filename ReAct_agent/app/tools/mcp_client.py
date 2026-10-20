@@ -22,6 +22,8 @@ class MCPClientError(RuntimeError):
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _SERVER_MODULES = {
     "finzer-gold-mcp": "app.mcp_servers.gold.server",
+    "finzer-mutual-fund-mcp": "app.mcp_servers.mutual_fund.server",
+    "finzer-wishlist-mcp": "app.mcp_servers.wishlist.server"
 }
 
 

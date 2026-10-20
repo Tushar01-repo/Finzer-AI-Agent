@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -83,8 +84,8 @@ class ContextManager:
         self,
         max_context_tokens: int = 6000,
         max_recent_messages: int = 10,
-        max_observations: int = 5,
-        max_observation_tokens: int = 1200,
+        max_observations: int = 16,
+        max_observation_tokens: int = 1600,
     ) -> None:
 
         if max_context_tokens <= 0:
@@ -180,9 +181,26 @@ class ContextManager:
         if self.max_observations == 0:
             return []
 
-        selected = state.observations[
-            -self.max_observations:
-        ]
+        # Preserve the most relevant successful evidence for the current topic.
+        # A fresh MF question must not be crowded out by earlier gold quotes.
+        query = state.user_query.lower()
+        mf_terms = ("mutual fund", "fund", "scheme", "nav", "motilal", "sbi", "their code", "their schema")
+        gold_terms = ("gold", "xau", "bullion", "carat")
+        wishlist_terms = ("wishlist", "watchlist")
+        if any(term in query for term in wishlist_terms):
+            preferred = ("wishlist_",)
+        elif any(term in query for term in gold_terms):
+            preferred = ("gold_",)
+        elif any(term in query for term in mf_terms) or re.search(r"\b(their|those|these)\s+(?:scheme|schema|codes?)\b", query):
+            preferred = ("search_mutual_funds", "get_mutual_fund", "mutual_fund", "get_nav", "get_latest_nav")
+        else:
+            preferred = ()
+        observations = state.observations
+        if preferred:
+            matching = [obs for obs in observations if any(obs.tool_name.startswith(p) for p in preferred)]
+            # Keep recent matching evidence, plus any current-run observations.
+            observations = matching if matching else observations
+        selected = observations[-self.max_observations:]
 
         results: list[ToolObservation] = []
 
