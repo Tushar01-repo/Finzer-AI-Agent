@@ -271,41 +271,68 @@ class ReActGraph:
 
     @staticmethod
     def _read_evidence(state: AgentState) -> str:
-        """Summarize verified results without pretending old NAVs are current."""
-        lines = []
-        seen = set()
+        """Return bounded source excerpts from successful current-run reads."""
+        lines: list[str] = []
+        seen: set[tuple[str, str]] = set()
         for obs in state.observations:
             if obs.status != ObservationStatus.SUCCESS or not isinstance(obs.data, dict):
                 continue
             envelope = obs.data
-            if envelope.get("historical_context_only"):
-                continue
-            if envelope.get("status") != "success":
+            if envelope.get("historical_context_only") or envelope.get("status") != "success":
                 continue
             data = envelope.get("data")
-            if obs.tool_name == "get_latest_nav" and isinstance(data, dict):
-                code = data.get("scheme_code")
-                if code in seen:
+            if not isinstance(data, dict):
+                continue
+            if obs.tool_name == "get_latest_nav":
+                key = (obs.tool_name, str(data.get("scheme_code")))
+                if key in seen:
                     continue
-                seen.add(code)
-                lines.append(f"- {data.get('scheme_name', 'Unknown fund')} (scheme {code}): "
-                             f"NAV {data.get('nav', 'unavailable')}, dated {data.get('date', 'unknown')}")
-        return "\n".join(lines)
+                seen.add(key)
+                lines.append(f"- {data.get('scheme_name', 'Unknown fund')} "
+                             f"(scheme {data.get('scheme_code')}): NAV {data.get('nav', 'unavailable')}, "
+                             f"dated {data.get('date', 'unknown')}. The returned date may be historical.")
+            elif obs.tool_name in {"news_rag", "document_rag"}:
+                sources = data.get("sources")
+                if not isinstance(sources, list):
+                    continue
+                for source in sources[:5]:
+                    if not isinstance(source, dict):
+                        continue
+                    identity = (source.get("article_key") or source.get("url") or
+                                str((source.get("document_key"), source.get("chunk_id"), source.get("title"))))
+                    key = (obs.tool_name, str(identity))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    if obs.tool_name == "news_rag":
+                        lines.append(f"- Retrieved news: {source.get('title', 'Untitled')} "
+                                     f"(published: {source.get('published_at') or 'unknown'}). "
+                                     f"Source summary: {str(source.get('summary') or 'No summary supplied')[:1200]} "
+                                     f"URL: {source.get('url') or 'unavailable'}")
+                    else:
+                        lines.append(f"- Document {source.get('document_key') or data.get('document_key')}, "
+                                     f"chunk {source.get('chunk_id')}, pages "
+                                     f"{source.get('page_start')}–{source.get('page_end')}: "
+                                     f"{str(source.get('content') or '')[:1200]}")
+            if len(lines) >= 10:
+                break
+        return "\n".join(lines[:10])
 
     def _finish_with_partial(self, state: AgentState, reason: str) -> None:
         evidence = self._read_evidence(state)
-        if evidence:
-            state.final_answer = ("I could verify the following NAV results:\n" + evidence +
-                                  "\n\nI could not complete every requested lookup (" + reason +
-                                  "). These NAV dates may be historical; I have not verified that "
-                                  "the schemes are currently active.")
-            state.next_action = NextAction.FINISH
-            state.pending_tool_call = None
-            state.execution_status = ExecutionStatus.COMPLETED
-            state.messages.append(ConversationMessage(role=MessageRole.ASSISTANT,
-                                                      content=state.final_answer))
-        else:
+        if not evidence:
             self._fail(state, "TOOL_LIMIT" if "tool" in reason else "STEP_LIMIT", reason)
+            return
+        state.final_answer = (
+            "The lookup stopped before I completed the full answer (" + reason + "). "
+            "The following retrieved evidence may help, but has not been fully synthesized "
+            "or checked for relevance to every part of your request:\n\n" + evidence
+        )
+        state.next_action = NextAction.FINISH
+        state.pending_tool_call = None
+        state.execution_status = ExecutionStatus.COMPLETED
+        state.messages.append(ConversationMessage(role=MessageRole.ASSISTANT,
+                                                  content=state.final_answer))
 
     @_observe_graph_operation("agent_decide")
     def _checkpointed_decide(self, graph_state: _GraphState) -> _GraphState:
@@ -582,10 +609,6 @@ class ReActGraph:
                 )
                 return
 
-        if contract.operation == ToolOperation.READ:
-            fingerprint = json.dumps([call.tool_name, call.arguments], sort_keys=True, default=str)
-            self._read_call_cache.setdefault(state.run_id, set()).add(fingerprint)
-
         state.tool_call_count += 1
 
         try:
@@ -644,6 +667,9 @@ class ReActGraph:
         )
 
         state.observations.append(observation)
+        if contract.operation == ToolOperation.READ and observation.status == ObservationStatus.SUCCESS:
+            fingerprint = json.dumps([call.tool_name, call.arguments], sort_keys=True, default=str)
+            self._read_call_cache.setdefault(state.run_id, set()).add(fingerprint)
 
         # Never re-plan or automatically request another approval after an
         # approved WRITE fails. The backend outcome can be uncertain.
